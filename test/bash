@@ -1,0 +1,8 @@
+###source /public/software/profile.d/compiler_gnu-7.2.0.sh
+###source /public/software/profile.d/mpi_openmpi-gnu-2.1.2.sh
+
+source /public/software/profile.d/compiler_intel-compiler-2017.5.239.sh
+source /public/software/profile.d/mpi_intelmpi-2017.4.239.sh
+
+C_INCLUDE_PATH=$C_INCLUDE_PATH:/public/home/yeyj/RT_FD:/public/home/yeyj/FT_CC:/public/home/yeyj/Ring_FD
+export C_INCLUDE_PATH

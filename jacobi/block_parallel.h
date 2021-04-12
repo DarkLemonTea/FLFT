@@ -20,22 +20,6 @@ void free_reqs(MPI_Request *reqs, int num) {
 	}
 }
 
-void local_reduce(MPI_Op op, void *source, void *target, int count, MPI_Datatype datatype) {
-	//º”µΩtarget¿Ô
-	AnyArray local_target = AnyArray(target, datatype, count);
-	AnyArray local_source = AnyArray(source, datatype, count);
-	switch (op) {
-	case MPI_MAX: local_target.MAX(local_source); break;
-	case MPI_MIN: local_target.MIN(local_source); break;
-	case MPI_SUM: local_target.SUM(local_source); break;
-	case MPI_PROD: local_target.PROD(local_source); break;
-	case MPI_BAND: local_target.BAND(local_source); break;
-	case MPI_BOR: local_target.BOR(local_source); break;
-	case MPI_BXOR: local_target.BXOR(local_source); break;
-	default: printf("Not support user-defined operations\n");
-	}
-}
-
 MPI_Aint datatype_span(MPI_Datatype dt,int count,MPI_Aint *gap) {
 	int size;
 	MPI_Aint lb, t_lb, extent, t_extent;

@@ -2,13 +2,17 @@
 #include<math.h>
 #include<mpi.h>
 #include<string.h>
-#include"gen_matrix.h"
-#include"block_jacobi.h"
+
+#ifndef HEADER_FILE
+#define HEADER_FILE
+#include"../head/jacobi/gen_matrix.h"
+#include"../head/jacobi/block_parallel.h"
+#endif
+
+#include"../head/jacobi/block_jacobi.h"
 
 #include<sys/time.h>
 #include<unistd.h>
-
-
 
 int main() {
 	int my_rank, comm_size;
@@ -29,7 +33,7 @@ int main() {
 	double *x_local;
 
 	int N = (int)sqrt(comm_size);
-	int M = 10000;
+	int M = 1000;
 
 	int row = my_rank / N;
 	int col = my_rank % N;

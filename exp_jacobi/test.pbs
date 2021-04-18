@@ -1,5 +1,5 @@
 #!/bin/bash -x
-#PBS -N sim_iter
+#PBS -N jacobi
 
 #PBS -l walltime=00:30:00
 #PBS -j oe
@@ -11,7 +11,7 @@ source /public/software/profile.d/compiler_intel-compiler-2017.5.239.sh
 source /public/software/profile.d/mpi_intelmpi-2017.4.239.sh
 
 #running jobs
-cd /public/home/yeyj/jacobi1
+cd /public/home/yeyj/jacobi
 
 #PBS -l nodes=2:ppn=64
 mpirun -np 64 ./test

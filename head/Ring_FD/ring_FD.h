@@ -70,8 +70,6 @@ int ring_FD(
 	MPI_Comm_rank(comm, &my_rank);
 	MPI_Comm_size(comm, &comm_size);
 
-	(*sp).Last_lagging_procs = (*sp).Lagging_procs;
-
 	Comm_proc rescuer; //◊Ó÷’’¸æ»’ﬂ
 	rescuer.rank = -1;
 
@@ -80,6 +78,9 @@ int ring_FD(
 	int result, res;
 	result = ring_procs_connect(detector_stage, fd, comm, (*sp).Lagging_procs, &(*sp).ring);
 	//printf("rank %d gets through the FD\n", my_rank);
+
+	(*sp).Last_lagging_procs.num = (*sp).Lagging_procs.num;
+	(*sp).Last_lagging_procs.procs = (*sp).Lagging_procs.procs;
 	
 	switch (result)
 	{

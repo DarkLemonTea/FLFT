@@ -114,8 +114,8 @@ void init_proc(
 	int rank,
 	Comm_proc *proc
 ) {
-	(*proc).rank = rank;
-	(*proc).comm_stage = READY;
+	proc->rank = rank;
+	proc->comm_stage = READY;
 }
 
 //等待时间与放行比例
@@ -146,12 +146,13 @@ void init_fd_var(
 //查找是否在列表中
 int in(int num, int *list, int target) {
 	if (num == 0) return 0;
-	if (target = EMPTY) return 0;
-	int i;
-	for (i = 0; i < num; i++) {
-		if (list[i] == target) return 1;
+	else {
+		int i;
+		for (i = 0; i < num; i++) {
+			if (list[i] == target) return 1;
+		}
+		return 0;
 	}
-	return 0;
 }
 
 //合并数组
@@ -222,16 +223,15 @@ int left_proc(int comm_size, int my_rank) { return (comm_size + my_rank - 1) % c
 int right_proc(int comm_size, int my_rank) { return (my_rank + 1) % comm_size; }
 
 //寻找最近有效对象
-int find_valid(int comm_size, int rank, int lagging_num, int *lagging_procs, char l_or_r) 
-{
+int find_valid(int comm_size, int rank, int lagging_num, int *lagging_procs, char l_or_r) {
 	int tmp_proc;
 	if (l_or_r == 'l') {
 		tmp_proc = left_proc(comm_size, rank);
-		while (in(lagging_num, lagging_procs, tmp_proc)) { tmp_proc = left_proc(comm_size, tmp_proc); }
+		while (in(lagging_num, lagging_procs, tmp_proc)) { tmp_proc = left_proc(comm_size, tmp_proc); }		
 	}
 	else if (l_or_r == 'r') {
 		tmp_proc = right_proc(comm_size, rank);
-		while (in(lagging_num, lagging_procs, tmp_proc)) { tmp_proc = right_proc(comm_size, tmp_proc); }
+		while (in(lagging_num, lagging_procs, tmp_proc)) { tmp_proc = right_proc(comm_size, tmp_proc); }	
 	}
 	return tmp_proc;
 }
@@ -474,7 +474,7 @@ typedef struct Procs_set {
 
 typedef struct Set_pointers {
 	int current_stage;
-	P_set Last_lagging_procs;	 //上一次的迟到进程列表，用于数据备份的恢复
+	P_set Last_lagging_procs;
 	P_set Lagging_procs;         //迟到进程列表
 	Revive_LL *local_re_phead;   //存储恢复进程的临时链表
 	P_set Revive_procs;          //恢复进程列表

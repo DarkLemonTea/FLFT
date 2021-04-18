@@ -44,7 +44,7 @@ int FT_block_jacobi(
 	init_detector(&sp);
 	//故障检测变量，用于设置放行率和等待时间上限
 	FD_var fd;
-	init_fd_var(0.90, 5, 30, 0.5, 0.5, &fd);
+	init_fd_var(0.90, 5, 30, 1, 1, &fd);
 
 	MPI_Aint seg_count = (MPI_Aint)M;
 	int max_reqs = 0;
@@ -123,17 +123,23 @@ int FT_block_jacobi(
 	
 	while (iter_num < max_iter) {
 		
-		/*if (iter_num == 5 && my_rank == 11) {
-			sleep(3);
-		}*/
+		if (iter_num == 5 && my_rank == 11) {
+			sleep(5);
+		}
 
 		Swap(x_local_old, x_local_new);
 
 		//利用迭代矩阵计算出本地的向量T_local*x_local_old=x_local_tmp
 		matrix_multi_vector(M, T_local, x_local_old, x_local_temp);
 
+		/*if (iter_num >= 20) {
+			printf("rank %d iter num %d: lagging num is %d, last lagging num is %d\n",
+				my_rank, iter_num, sp.Lagging_procs.num, sp.Last_lagging_procs.num);
+		}*/
+
 		//-----------------------------------------------------------------------------------------
 		fd_res = ring_FD(iter_num, fd, comm, &sp);
+		
 		if (fd_res == FD_FAILURE) {
 			printf("FD failure\n");
 			res = FAILURE;
@@ -142,8 +148,14 @@ int FT_block_jacobi(
 		if (fd_res == FD_REVIVE) {
 			//被捡回，恢复到和其他进程一致的状态
 			printf("rank %d revive!,current stage is %d\n", my_rank, sp.current_stage);
-			MPI_Recv(&x_local_new, M, MPI_DOUBLE, my.des.rank, 
+			MPI_Recv(x_local_new, M, MPI_DOUBLE, my.des.rank, 
 				DATA_RECOVERY, comm, MPI_STATUSES_IGNORE);
+			
+			reb_res = rebuild_comm_graph(sp, my_rank, N, 'r', row_root.rank, &r_ct);
+			if (reb_res == REBUILD_FAILURE) { res = FAILURE; break; }
+			reb_res = rebuild_comm_graph(sp, my_rank, N, 'c', col_root.rank, &b_ct);
+			if (reb_res == REBUILD_FAILURE) { res = FAILURE; break; }
+
 			iter_num = sp.current_stage + 1;
 			continue;
 		}
@@ -155,12 +167,12 @@ int FT_block_jacobi(
 			if (reb_res == REBUILD_FAILURE) { res = FAILURE; break; }
 			reb_res = rebuild_comm_graph(sp, my_rank, N, 'c', col_root.rank, &b_ct);
 			if (reb_res == REBUILD_FAILURE) { res = FAILURE; break; }
-			/*if (iter_num > 0) {
-				printf("rank %d, r_ct: p %d, lc %d, rc %d, b_ct: p %d, lc %d, rc %d\n",
-					my_rank, r_ct.parent.rank, r_ct.lchild.rank, r_ct.rchild.rank,
-					b_ct.parent.rank, b_ct.lchild.rank, b_ct.rchild.rank);
-			}*/
-		}	
+			//if (iter_num > 0) {
+			//	printf("rank %d, r_ct: p %d, lc %d, rc %d, b_ct: p %d, lc %d, rc %d\n",
+			//		my_rank, r_ct.parent.rank, r_ct.lchild.rank, r_ct.rchild.rank,
+			//		b_ct.parent.rank, b_ct.lchild.rank, b_ct.rchild.rank);
+			//}
+		}
 
 		if (my.src.rank != EMPTY) {
 			Swap(x_src_old, x_src_new);
@@ -207,6 +219,7 @@ int FT_block_jacobi(
 
 		res = Bcast_2D(x_local_new, M, MPI_DOUBLE, b_ct, comm, seg_count);
 		
+		//printf("rank %d finish iter %d cal x new\n", my_rank, iter_num);
 
 		//printf("rank %d finish bcast\n", my_rank);
 
@@ -310,17 +323,24 @@ int FT_block_jacobi(
 			probe_revive_procs(iter_num, comm, &sp);
 		}
 
-		if (iter_num % 50 == 0 && res != FD_REVIVE && sp.Lagging_procs.num > 0) {
+		if (iter_num % 20 == 0 && res != FD_REVIVE && sp.Lagging_procs.num > 0) {
 			ring_retrieve_procs(iter_num, comm, fd.T_retrieve, &sp);
 			//捡回后直接激活
 			activate_revive_procs(comm, &sp);
+			
 			if (in(sp.Revive_procs.num, sp.Revive_procs.procs, my.src.rank)) {
 				MPI_Send(x_src_new, M, MPI_DOUBLE, my.src.rank, DATA_RECOVERY, comm);
 			}
 			if (in(sp.Revive_procs.num, sp.Revive_procs.procs, col_root.rank)
 				&& (col_root.des.rank == my_rank)) {
-				MPI_Send(x_src_new, M, MPI_DOUBLE, my.src.rank, DATA_RECOVERY, comm);
+				MPI_Send(x_root_new, M, MPI_DOUBLE, col_root.rank, DATA_RECOVERY, comm);
 			}
+
+			//重新调整通信结构
+			reb_res = rebuild_comm_graph(sp, my_rank, N, 'r', row_root.rank, &r_ct);
+			if (reb_res == REBUILD_FAILURE) { res = FAILURE; break; }
+			reb_res = rebuild_comm_graph(sp, my_rank, N, 'c', col_root.rank, &b_ct);
+			if (reb_res == REBUILD_FAILURE) { res = FAILURE; break; }
 		}
 
 		//-----------------------------------------------------------------------------------------
@@ -336,12 +356,17 @@ int FT_block_jacobi(
 		printf("cost time is %lf\n", cost_time);
 	}
 
-
 	memcpy(x_local, x_local_new, M * dtsize);
+
+	if (res == FAILURE) {
+		return res;
+	}
+
 	if (global_dis < precision) {
 		return ITERATION_CONVERGENCE;
 	}
 	else {
 		return ITERATION_NOT_CONVERGENCE;
 	}
+	
 }

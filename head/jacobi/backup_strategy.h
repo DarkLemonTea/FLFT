@@ -166,7 +166,7 @@ int rebuild_comm_graph(
 			}
 		}
 		ll_num = ind;
-		num = n - ll_num;
+		num = n;
 
 		procs = (int*)calloc(num, sizeof(int));
 
@@ -186,7 +186,7 @@ int rebuild_comm_graph(
 
 		ind = 1;
 		
-		for (i = 1; i < n; i++) {
+		for (i = 1; i < num; i++) {
 			tmp_rank = col_ind + i * n;
 			if (in(ll_num, ll_procs, tmp_rank)) {
 				back_up_index(tmp_rank, n, fd.Last_lagging_procs, &tmp);
@@ -198,9 +198,6 @@ int rebuild_comm_graph(
 				}
 				else {
 					procs[ind] = tmp.des.rank;
-					if (my_rank == tmp_rank) {
-						index = ind;
-					}
 					ind += 1;
 				}
 			}
@@ -216,7 +213,7 @@ int rebuild_comm_graph(
 			}
 		}
 
-		if (my_rank == procs[0]) { index = 0; }
+		if (my_rank == root) { index = 0; }
 	}
 
 	//根据坐标，读取对应树的值

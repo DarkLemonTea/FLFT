@@ -315,8 +315,6 @@ void ring_retrieve_procs(
 	//init_ring(comm_size, my_rank, detector_stage, (*sp).Lagging_procs.num, (*sp).Lagging_procs.procs, &(*sp).ring);
 	//printf("rank %d left is %d,right is %d\n", my_rank, (*sp).ring.left_proc.rank, (*sp).ring.right_proc.rank);
 
-	(*sp).Last_lagging_procs = (*sp).Lagging_procs;
-
 	(*sp).Revive_procs.num = 0;
 	(*sp).Revive_procs.procs = NULL;
 
@@ -378,6 +376,8 @@ void ring_retrieve_procs(
 	//}
 
 	remove_revive_procs(sp);
+	(*sp).Last_lagging_procs.num = (*sp).Lagging_procs.num;
+	(*sp).Last_lagging_procs.procs = (*sp).Lagging_procs.procs;
 	init_ring(comm_size, my_rank, detector_stage, (*sp).Lagging_procs.num, (*sp).Lagging_procs.procs, &(*sp).ring);
 }
 

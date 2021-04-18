@@ -108,7 +108,7 @@ int find_vaild_neighbor(
 			(my_rank - p->proc.rank + comm_size) % comm_size < dis) {
 			dis = (my_rank - p->proc.rank + comm_size) % comm_size;
 			*neighbor_rank = p->proc.rank;
-			printf("rank %d vaild proc is %d\n", my_rank, *neighbor_rank);
+			//printf("rank %d vaild proc is %d\n", my_rank, *neighbor_rank);
 			res = 1;
 		}
 		p = p->next;
@@ -494,7 +494,7 @@ int ring_procs_connect(
 
 				if ((*ring).right_proc.comm_stage == CONNECT_FINISH) { rp.need_to_recon_r = 0; }
 				else { rp.need_to_recon_r = 1; }
-			}		
+			}
 		}
 
 		//重连
@@ -572,13 +572,13 @@ int ring_procs_connect(
 			break;
 		}
 
-		gettimeofday(&end, NULL);
 		cost_time = 1000.0 * (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000.0;
 		//如果超过最大时限，返回失败
 		if (cost_time > fd_var.T_max) {
 			result = RING_CONNECT_FAILURE;
 			break;
 		}
+
 	}
 
 	//删除链表

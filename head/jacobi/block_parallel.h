@@ -77,17 +77,7 @@ void creat_cube_tree(
 			if (col_ind == 0) { index = root % n; }
 			else { index = my_rank % n; }
 		}
-		//根据坐标，读取对应树的值
-		//树方向：
-		if (index == 0) { (*ct).parent.rank = -1; }
-		else { (*ct).parent.rank = procs[(index - 1) / 2]; }
-		//左孩子
-		if (index * 2 + 1 >= n) { (*ct).lchild.rank = -1; }
-		else { (*ct).lchild.rank = procs[index * 2 + 1]; }
-		//右孩子
-		if (index * 2 + 2 >= n) { (*ct).rchild.rank = -1; }
-		else { (*ct).rchild.rank = procs[index * 2 + 2]; }
-		free(procs);
+		
 	}
 	else if (row_or_col = 'c') {
 		for (i = 0; i < n; i++) {
@@ -102,18 +92,19 @@ void creat_cube_tree(
 			if (row_ind == 0) { index = root / n; }
 			else { index = my_rank / n; }
 		}
-		//根据坐标，读取对应树的值
-		//树方向：
-		if (index == 0) { (*ct).parent.rank = -1; }
-		else { (*ct).parent.rank = procs[(index - 1) / 2]; }
-		//左孩子
-		if (index * 2 + 1 >= n) { (*ct).lchild.rank = -1; }
-		else { (*ct).lchild.rank = procs[index * 2 + 1]; }
-		//右孩子
-		if (index * 2 + 2 >= n) { (*ct).rchild.rank = -1; }
-		else { (*ct).rchild.rank = procs[index * 2 + 2]; }
-		free(procs);
 	}
+
+	//树方向：
+	if (index == 0) { (*ct).parent.rank = -1; }
+	else { (*ct).parent.rank = procs[(index - 1) / 2]; }
+	//左孩子
+	if (index * 2 + 1 >= n) { (*ct).lchild.rank = -1; }
+	else { (*ct).lchild.rank = procs[index * 2 + 1]; }
+	//右孩子
+	if (index * 2 + 2 >= n) { (*ct).rchild.rank = -1; }
+	else { (*ct).rchild.rank = procs[index * 2 + 2]; }
+	
+	free(procs);
 
 	if ((*ct).lchild.rank > -1) {
 		(*ct).nextsize += 1;

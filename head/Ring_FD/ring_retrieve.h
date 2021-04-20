@@ -376,8 +376,6 @@ void ring_retrieve_procs(
 	//}
 
 	remove_revive_procs(sp);
-	(*sp).Last_lagging_procs.num = (*sp).Lagging_procs.num;
-	(*sp).Last_lagging_procs.procs = (*sp).Lagging_procs.procs;
 	init_ring(comm_size, my_rank, detector_stage, (*sp).Lagging_procs.num, (*sp).Lagging_procs.procs, &(*sp).ring);
 }
 

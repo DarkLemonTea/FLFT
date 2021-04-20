@@ -20,10 +20,12 @@ typedef struct reconnect_Node {
 typedef struct reconnect_List{
 	int need_to_recon_l;
 	Recon_LL *left_head;
+	int l_num;
 
 	int need_to_recon_r;
 	Recon_LL *right_head;
-	
+	int r_num;
+
 	int recently_tried_proc; 
 	struct time_variable {
 		double sec;
@@ -45,6 +47,9 @@ void init_recon_procs(Recon_procs *rp) {
 
 	(*rp).need_to_recon_l = 0;
 	(*rp).need_to_recon_r = 0;
+
+	(*rp).l_num = 2;
+	(*rp).r_num = 2;
 }
 
 //查找
@@ -507,7 +512,7 @@ int ring_procs_connect(
 			if (rp.need_to_recon_r == 1) {
 				gettimeofday(&end, NULL);
 				cost_time = 1000.0 * (end.tv_sec - rp.start.sec) + (end.tv_usec - rp.start.usec) / 1000.0;
-				if (cost_time > fd_var.T_wait) {
+				if (cost_time > fd_var.T_wait * rp.r_num) {
 					//记录时间
 					rp.start.sec = end.tv_sec;
 					rp.start.usec = end.tv_usec;
@@ -516,6 +521,7 @@ int ring_procs_connect(
 						lagging_set.num, lagging_set.procs, 'r');
 					//将该进程加入链表中
 					creat_new_recon_proc(rp.right_head, rp.recently_tried_proc, detector_stage);
+					rp.r_num += 1;
 				}
 				ring_active_reconnect(comm, rp.right_head);
 			}
@@ -530,8 +536,10 @@ int ring_procs_connect(
 		if (cou.demand == 1) { arrived_procs_count(comm, my_rank, &cou); }
 		//如果计数完成
 		if (cou.stage == FINISH) {
-			//printf("rank %d count num is %d\n", my_rank, cou.sum);
-
+			/*if (my_rank % 20 == 0) {
+				printf("rank %d count num is %d\n", my_rank, cou.sum);
+			}*/
+			
 			if (cou.sum < min_arr_num) {
 				//计数未达标，初始化counter，重新计数
 				init_counter(&cou);
@@ -604,7 +612,7 @@ void block_and_rescuer_confirm(
 	MPI_Comm_size(comm, &comm_size);
 	printf("rank %d block!\n", my_rank);
 
-	double block_time = 5 * fd.T_wait;
+	double block_time = 10 * fd.T_wait;
 	Comm_proc savior, tmp_proc;
 	savior.comm_stage = CONNECT_LAGGING;
 	double cost_time;

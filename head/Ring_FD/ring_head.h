@@ -19,6 +19,7 @@
 #define FD_SUCCESS 0
 #define FD_FAILURE 1
 #define FD_REVIVE 2
+#define FD_PASS 3
 
 #define READY 0
 #define STAGE1 1
@@ -474,7 +475,6 @@ typedef struct Procs_set {
 
 typedef struct Set_pointers {
 	int current_stage;
-	P_set Last_lagging_procs;
 	P_set Lagging_procs;         //迟到进程列表
 	Revive_LL *local_re_phead;   //存储恢复进程的临时链表
 	P_set Revive_procs;          //恢复进程列表
@@ -483,9 +483,6 @@ typedef struct Set_pointers {
 
 void init_detector(Detector *sp) {
 	//初始化
-	(*sp).Last_lagging_procs.num = 0;
-	(*sp).Last_lagging_procs.procs = NULL;
-
 	(*sp).Lagging_procs.num = 0;
 	(*sp).Lagging_procs.procs = NULL;
 	

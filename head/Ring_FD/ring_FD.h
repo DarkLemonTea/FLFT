@@ -78,9 +78,6 @@ int ring_FD(
 	int result, res;
 	result = ring_procs_connect(detector_stage, fd, comm, (*sp).Lagging_procs, &(*sp).ring);
 	//printf("rank %d gets through the FD\n", my_rank);
-
-	(*sp).Last_lagging_procs.num = (*sp).Lagging_procs.num;
-	(*sp).Last_lagging_procs.procs = (*sp).Lagging_procs.procs;
 	
 	switch (result)
 	{
@@ -94,7 +91,7 @@ int ring_FD(
 		multigather_lagging_procs(comm, (*sp).ring, &(*sp).Lagging_procs.num, &(*sp).Lagging_procs.procs);
 		//¸üÐÂÏÂÁÚ¾Ó
 		init_ring(comm_size, my_rank, detector_stage, (*sp).Lagging_procs.num, (*sp).Lagging_procs.procs, &(*sp).ring);
-		res = FD_SUCCESS;
+		res = FD_PASS;
 		break;
 	}
 	case RING_CONNECT_LAGGING: {

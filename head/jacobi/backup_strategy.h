@@ -35,7 +35,6 @@ typedef struct backup_obj {
 void back_up_index(
 	int rank,
 	int n,
-	P_set L,
 	Backup *b
 ) {
 	if (rank == EMPTY) {
@@ -52,9 +51,7 @@ void back_up_index(
 		//root进程只需要找到备份进程，不需要备份其他进程的数据
 		src = EMPTY;
 		des = rank % n + ((rank / n + 1) % n)*n;
-		while (in(L.num,L.procs,des)){
-			des = (des % n + 1) % n + (rank / n)*n;
-		}
+	
 		init_proc(src, &(*b).src);
 		init_proc(des, &(*b).des);
 	}
@@ -62,11 +59,11 @@ void back_up_index(
 		src = (rank%n - 1 + n) % n + (rank / n)*n;
 		des = (rank%n + 1) % n + (rank / n)*n;
 
-		while (in(L.num, L.procs, src) || (src % n == src / n))
+		while (src % n == src / n)
 		{
 			src = (src%n - 1 + n) % n + (src / n)*n;
 		}
-		while (in(L.num, L.procs, des) || (des % n == des / n))
+		while (des % n == des / n)
 		{
 			des = (des%n + 1) % n + (des / n)*n;
 		}
@@ -112,7 +109,7 @@ int rebuild_comm_graph(
 
 		procs[0] = root;
 		if (in(ll_num, ll_procs, root)) {
-			back_up_index(root, n, fd.Last_lagging_procs, &tmp);
+			back_up_index(root, n, &tmp);
 			if (in(fd.Lagging_procs.num, fd.Lagging_procs.procs, tmp.des.rank)) {
 				if (ll_procs != NULL) { free(ll_procs); }
 				if (procs != NULL) { free(procs); }
@@ -129,7 +126,7 @@ int rebuild_comm_graph(
 		for (i = 1; i < n; i++) {
 			tmp_rank = row_ind * n + i;
 			if (in(ll_num, ll_procs, tmp_rank)) {
-				back_up_index(tmp_rank, n, fd.Last_lagging_procs, &tmp);
+				back_up_index(tmp_rank, n, &tmp);
 				//如果无法恢复，则中断退出
 				if (in(fd.Lagging_procs.num, fd.Lagging_procs.procs, tmp.des.rank)) {
 					if (ll_procs != NULL) { free(ll_procs); }
@@ -172,7 +169,7 @@ int rebuild_comm_graph(
 
 		procs[0] = root;
 		if (in(ll_num, ll_procs, root)) {
-			back_up_index(root, n, fd.Last_lagging_procs, &tmp);
+			back_up_index(root, n, &tmp);
 			if (in(fd.Lagging_procs.num, fd.Lagging_procs.procs, tmp.des.rank)) {
 				if (ll_procs != NULL) { free(ll_procs); }
 				if (procs != NULL) { free(procs); }
@@ -189,7 +186,7 @@ int rebuild_comm_graph(
 		for (i = 1; i < num; i++) {
 			tmp_rank = col_ind + i * n;
 			if (in(ll_num, ll_procs, tmp_rank)) {
-				back_up_index(tmp_rank, n, fd.Last_lagging_procs, &tmp);
+				back_up_index(tmp_rank, n, &tmp);
 				//如果无法恢复，则中断退出
 				if (in(fd.Lagging_procs.num, fd.Lagging_procs.procs, tmp.des.rank)) {
 					if (ll_procs != NULL) { free(ll_procs); }
@@ -203,11 +200,18 @@ int rebuild_comm_graph(
 			}
 			else {
 				procs[ind] = tmp_rank;
-				if (tmp_rank%n == tmp_rank/n) {
-					procs[ind] = col_ind;
-				}
 				if (my_rank == tmp_rank) {
 					index = ind;
+				}
+				if (tmp_rank%n == tmp_rank/n) {
+					procs[ind] = col_ind;
+					if (my_rank == col_ind) {
+						index = ind;
+					}
+					if (in(fd.Lagging_procs.num, fd.Lagging_procs.procs, col_ind)) {
+						back_up_index(col_ind, n, &tmp);
+						procs[ind] = tmp.des.rank;
+					}
 				}
 				ind += 1;
 			}

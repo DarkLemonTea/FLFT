@@ -32,7 +32,7 @@ int main() {
 	double *x_local;
 
 	int N = (int)sqrt(comm_size);
-	int M = 10;
+	int M = 10000;
 
 	int row = my_rank / N;
 	int col = my_rank % N;

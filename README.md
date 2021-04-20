@@ -16,3 +16,7 @@ Failure detection uses timing and counting methods, local connections establish 
 However, with this judgment mode, the timeout value is usually not extended too much, and there may be available processes that become isolated points, which is a false positive. The Fail-lagging model does not immediately terminate the lagging process. If the lagging process is still available, it can be retrieved and reused.
 
 The implementation of failure detection is based on ring, ring-tree, ring-butterfly. Collective communication uses point-to-point communication to improve the realization, increase the failure tolerance function, can reconstruct the communication structure according to the lagging process set, and ensure that the collective communication can be completed.
+
+The experiments and results can be found in the folder prefixed with "exp_".
+
+The experimental results of the Jacobi experiment have been displayed in the folder "exp_jacobi"

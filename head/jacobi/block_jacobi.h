@@ -148,7 +148,7 @@ int block_jacobi(
 	x_local_new = (double*)calloc(M, dtsize);
 
 	//≥ı ºªØ
-	Gen_init_value_X(M, -N, x_local_old);
+	Gen_init_value_X(M, -1, x_local_old);
 	memcpy(x_local_new, x_local_old, M * dtsize);
 
 	/*

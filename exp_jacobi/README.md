@@ -7,8 +7,11 @@ The result of experiments on Tianhe2:
 Each process is responsible for the calculation of a 3000*3000 matrix block
 
 We use the ring failure detection.
+
 As the number of processes increases, the efficiency will be reduced.
+
 Next we will use Ring-Tree failure detection to improve efficiency.
+
 
 The iteration converges at step 784
 

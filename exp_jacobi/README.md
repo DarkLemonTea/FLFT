@@ -17,7 +17,7 @@ The iteration converges at step 784
 
 - **bj-nfd:** use time of block-jacobi pure calculation
 - **bj-fd-nf:** use time of block-jacobi with failure detection, backup and fault tolerance
-- **bj-fd-sf:** use time of fault-tolerant block jacobi in the case of simulated failure.
+- **bj-fd-sf:** use time of fault-tolerant block jacobi in the case of simulated failures.
 
 *(The unit of time is milliseconds.)*
 

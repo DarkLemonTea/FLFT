@@ -3,16 +3,16 @@
 #include "ring_head.h"
 #endif
 
-typedef struct counter {
+typedef struct ring_counter {
 	int demand;
-	
+
 	int stage;
 	int count;
 	int sum;
 	Ring r;
-}Counter;
+}Ring_Counter;
 
-void init_counter(Counter *c) {
+void init_ring_counter(Ring_Counter *c) {
 	(*c).demand = 0;
 	(*c).stage = READY;
 	(*c).r.left_proc.rank = -1;
@@ -21,10 +21,10 @@ void init_counter(Counter *c) {
 	(*c).count = 0;
 }
 
-void arrived_procs_count(
+void ring_arrived_procs_count(
 	MPI_Comm comm,
 	int my_rank,
-	Counter *cou
+	Ring_Counter *cou
 ) {
 	switch ((*cou).stage)
 	{

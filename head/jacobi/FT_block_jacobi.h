@@ -2,17 +2,14 @@
 #include<mpi.h>
 #include<stdlib.h>
 
-#include<sys/time.h>
-#include<unistd.h>
+#include "../FLFT/FLFT.h"
 
-#ifndef HEADER_FILE
-#define HEADER_FILE
-#include "../Ring_FD/ring_FD.h"
 #include "gen_matrix.h"
-#include "block_parallel.h"
 #include "block_jacobi.h"
 #include "backup_strategy.h"
-#endif
+
+#include<sys/time.h>
+#include<unistd.h>
 
 #define FAILURE 2
 #define BACKUP_X 500
@@ -41,10 +38,12 @@ int FT_block_jacobi(
 
 	//指针变量，用于存储迟到进程列表、恢复进程列表的指针
 	Detector sp;
-	init_detector(&sp);
+	//init_detector(TYPE_RING, comm, 0, comm_size, &sp);
+	init_detector(TYPE_RING_TREE, comm, 0, 8, &sp);
+
 	//故障检测变量，用于设置放行率和等待时间上限
 	FD_var fd;
-	init_fd_var(0.95, 5, 30, 2, 1, &fd);
+	init_fd_var(0.95, 5, 30, 2, 2, &fd);
 
 	MPI_Aint seg_count = (MPI_Aint)M;
 	int max_reqs = 0;
@@ -138,7 +137,7 @@ int FT_block_jacobi(
 		}*/
 
 		//-----------------------------------------------------------------------------------------
-		fd_res = ring_FD(iter_num, fd, comm, &sp);
+		fd_res = FLFT_FD(iter_num, fd, comm, &sp);
 		
 		if (fd_res == FD_FAILURE) {
 			printf("FD failure\n");
@@ -166,16 +165,16 @@ int FT_block_jacobi(
 				if (reb_res == REBUILD_FAILURE) { res = FAILURE; break; }
 				reb_res = rebuild_comm_graph(sp, my_rank, N, 'c', col_root.rank, &b_ct);
 				if (reb_res == REBUILD_FAILURE) { res = FAILURE; break; }
-				//if (iter_num > 0) {
-				//	printf("rank %d, r_ct: p %d, lc %d, rc %d, b_ct: p %d, lc %d, rc %d\n",
-				//		my_rank, r_ct.parent.rank, r_ct.lchild.rank, r_ct.rchild.rank,
-				//		b_ct.parent.rank, b_ct.lchild.rank, b_ct.rchild.rank);
-				//}
+				/*if (iter_num > 0) {
+					printf("rank %d, r_ct: p %d, lc %d, rc %d, b_ct: p %d, lc %d, rc %d\n",
+						my_rank, r_ct.parent.rank, r_ct.lchild.rank, r_ct.rchild.rank,
+						b_ct.parent.rank, b_ct.lchild.rank, b_ct.rchild.rank);
+				}*/
 			}
 
 			if (my.src.rank != EMPTY) {
 				Swap(x_src_old, x_src_new);
-				if (in(sp.Lagging_procs.num, sp.Lagging_procs.procs, my.src.rank)) {
+				if (in(sp.Lagging_procs, my.src.rank)) {
 					reb_res = rebuild_comm_graph(sp, my.src.rank, N, 'c',
 						my.src.rank%N + (my.src.rank%N)*N, &srcb_ct);
 					if (reb_res == REBUILD_FAILURE) { res = FAILURE; break; }
@@ -184,7 +183,7 @@ int FT_block_jacobi(
 
 			if (col_root.des.rank == my_rank) {
 				Swap(x_root_old, x_root_new);
-				if (in(sp.Lagging_procs.num, sp.Lagging_procs.procs, col_root.rank)) {
+				if (in(sp.Lagging_procs, col_root.rank)) {
 					reb_res = rebuild_comm_graph(sp, col_root.rank, N, 'r', col_root.rank, &crr_ct);
 					if (reb_res == REBUILD_FAILURE) { res = FAILURE; break; }
 					reb_res = rebuild_comm_graph(sp, col_root.rank, N, 'c', col_root.rank, &crb_ct);
@@ -197,7 +196,7 @@ int FT_block_jacobi(
 		//计算x_local向量
 		//如果src在失败进程列表，额外承担reduce任务
 		if (my.src.rank != EMPTY) {
-			if (in(sp.Lagging_procs.num, sp.Lagging_procs.procs, my.src.rank)) {
+			if (in(sp.Lagging_procs, my.src.rank)) {
 				matrix_multi_vector(M, T_src, x_src_old, x_src_temp);
 				vector_add_vector(M, x_local_temp, x_src_temp);
 			}
@@ -223,7 +222,7 @@ int FT_block_jacobi(
 
 		//col root进程失败，额外承担其任务
 		if ((col_root.des.rank == my_rank) &&
-			in(sp.Lagging_procs.num, sp.Lagging_procs.procs, col_root.rank)) {
+			in(sp.Lagging_procs, col_root.rank)) {
 			
 			res = Reduce_2D(x_root_temp, x_root_new, M, MPI_DOUBLE, MPI_SUM,
 				crr_ct, comm, seg_count, max_reqs);
@@ -233,7 +232,7 @@ int FT_block_jacobi(
 		}
 
 		//备份源进程失败，承担与该进程同列的广播
-		if (in(sp.Lagging_procs.num, sp.Lagging_procs.procs, my.src.rank)) {
+		if (in(sp.Lagging_procs, my.src.rank)) {
 			res = Bcast_2D(x_src_new, M, MPI_DOUBLE, srcb_ct, comm, seg_count);
 		}
 
@@ -243,7 +242,7 @@ int FT_block_jacobi(
 		//计算距离
 		local_dis = Distance(x_local_new, x_local_old, M);
 		//printf("rank %d local dis is %f\n", my_rank, local_dis);
-		if (in(sp.Lagging_procs.num, sp.Lagging_procs.procs, my.src.rank)) {
+		if (in(sp.Lagging_procs, my.src.rank)) {
 			src_local_dis = Distance(x_src_new, x_src_old, M);
 			local_dis = local_dis > src_local_dis ? local_dis : src_local_dis;
 		}
@@ -255,7 +254,7 @@ int FT_block_jacobi(
 
 		//col root进程失败，额外承担其任务
 		if ((col_root.des.rank == my_rank) &&
-			in(sp.Lagging_procs.num, sp.Lagging_procs.procs, col_root.des.rank)) {
+			in(sp.Lagging_procs, col_root.des.rank)) {
 
 			cr_local_dis= Distance(x_root_new, x_root_old, M);
 			
@@ -266,7 +265,7 @@ int FT_block_jacobi(
 		}
 
 		//备份源进程失败，承担与该进程同列的广播
-		if (in(sp.Lagging_procs.num, sp.Lagging_procs.procs, my.src.rank)) {
+		if (in(sp.Lagging_procs, my.src.rank)) {
 			res = Bcast_2D(&src_global_dis, 1, MPI_DOUBLE, srcb_ct, comm, seg_count);
 		}
 
@@ -287,17 +286,17 @@ int FT_block_jacobi(
 
 		//-----------------------------------------------------------------------------------------
 		//备份数据
-		if ((!in(sp.Lagging_procs.num, sp.Lagging_procs.procs, my.src.rank))
+		if ((!in(sp.Lagging_procs, my.src.rank))
 			&& (my.src.rank != EMPTY)) {
 			MPI_Irecv(x_src_new, M, MPI_DOUBLE, my.src.rank, BACKUP_X, comm, &my.src.req);
 		}
 		
-		if ((!in(sp.Lagging_procs.num, sp.Lagging_procs.procs, col_root.rank))
+		if ((!in(sp.Lagging_procs, col_root.rank))
 			&& (col_root.des.rank == my_rank)) {
 			//printf("col root des %d is %d\n", col_root.rank, col_root.des.rank);
 			MPI_Irecv(x_root_new, M, MPI_DOUBLE, col_root.rank, BACKUP_ROOT_X, comm, &col_root.des.req);
 		}
-		if (!in(sp.Lagging_procs.num, sp.Lagging_procs.procs, my.des.rank)) {
+		if (!in(sp.Lagging_procs, my.des.rank)) {
 			//printf("rank %d my des is %d\n", my_rank, my.des.rank);
 			if (my_rank / N == my_rank % N) {
 				MPI_Isend(x_local_new, M, MPI_DOUBLE, my.des.rank, BACKUP_ROOT_X, comm, &my.des.req);
@@ -307,15 +306,15 @@ int FT_block_jacobi(
 			}		
 		}	
 		
-		if ((!in(sp.Lagging_procs.num, sp.Lagging_procs.procs, my.src.rank))
+		if ((!in(sp.Lagging_procs, my.src.rank))
 			&& (my.src.rank != EMPTY)) {
 			MPI_Wait(&my.src.req, MPI_STATUSES_IGNORE);
 		}
-		if ((!in(sp.Lagging_procs.num, sp.Lagging_procs.procs, col_root.rank))
+		if ((!in(sp.Lagging_procs, col_root.rank))
 			&& (col_root.des.rank == my_rank)) {
 			MPI_Wait(&col_root.des.req, MPI_STATUSES_IGNORE);
 		}
-		if (!in(sp.Lagging_procs.num, sp.Lagging_procs.procs, my.des.rank)) {
+		if (!in(sp.Lagging_procs, my.des.rank)) {
 			MPI_Wait(&my.des.req, MPI_STATUSES_IGNORE);
 		}	
 
@@ -329,14 +328,14 @@ int FT_block_jacobi(
 		}
 
 		if (iter_num % 20 == 0 && res != FD_REVIVE && sp.Lagging_procs.num > 0) {
-			ring_retrieve_procs(iter_num, comm, fd.T_retrieve, &sp);
+			retrieve_procs(iter_num, comm, fd.T_retrieve, &sp);
 			//捡回后直接激活
 			activate_revive_procs(comm, &sp);
 			
-			if (in(sp.Revive_procs.num, sp.Revive_procs.procs, my.src.rank)) {
+			if (in(sp.Revive_procs, my.src.rank)) {
 				MPI_Send(x_src_new, M, MPI_DOUBLE, my.src.rank, DATA_RECOVERY, comm);
 			}
-			if (in(sp.Revive_procs.num, sp.Revive_procs.procs, col_root.rank)
+			if (in(sp.Revive_procs, col_root.rank)
 				&& (col_root.des.rank == my_rank)) {
 				MPI_Send(x_root_new, M, MPI_DOUBLE, col_root.rank, DATA_RECOVERY, comm);
 			}

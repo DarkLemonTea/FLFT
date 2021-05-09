@@ -3,13 +3,7 @@
 #include<mpi.h>
 #include<string.h>
 
-#ifndef HEADER_FILE
-#define HEADER_FILE
-#include"../head/jacobi/gen_matrix.h"
-#include"../head/jacobi/block_parallel.h"
-#endif
-
-#include"../head/jacobi/block_jacobi.h"
+#include"../head/jacobi/FT_block_jacobi.h"
 
 #include<sys/time.h>
 #include<unistd.h>
@@ -33,7 +27,7 @@ int main() {
 	double *x_local;
 
 	int N = (int)sqrt(comm_size);
-	int M = 10000;
+	int M = 1000;
 
 	int row = my_rank / N;
 	int col = my_rank % N;
@@ -68,8 +62,8 @@ int main() {
 	free(A_local);
 	free(b_local);
 
-	res = block_jacobi(T_local, c_local, x_local, N, M, precision, max_iters, comm);
-
+	//res = block_jacobi(T_local, c_local, x_local, N, M, precision, max_iters, comm);
+	res = FT_block_jacobi(T_local, c_local, x_local, N, M, precision, max_iters, comm);
 
 	/*if (row == 0) {
 		printf("rank %d local x is: ", my_rank);

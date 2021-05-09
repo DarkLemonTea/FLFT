@@ -1,8 +1,11 @@
+#pragma once
+
 #ifndef HEADER_FILE
 #define HEADER_FILE
-#include "ring_head.h"
+#include "../fl_head.h"
 #endif
 #include "ring_count.h"
+
 
 //=============================================================================================================================
 //构造重连进程的链表
@@ -96,7 +99,7 @@ void clear_recon_list(Recon_LL *head) {
 }
 
 //寻找最近有效的通信对象
-int find_vaild_neighbor(
+int find_ring_vaild_neighbor(
 	int my_rank,
 	int comm_size,
 	Recon_LL *head,
@@ -125,8 +128,9 @@ int find_vaild_neighbor(
 //通信模板
 //=============================================================================================================================
 
-//被动通信模板
-void passive_comm_template(
+
+//环被动通信模板
+void ring_passive_comm_template(
 	MPI_Comm comm,
 	Comm_proc *proc
 ) {
@@ -160,11 +164,6 @@ void passive_comm_template(
 				(*proc).comm_stage = CONNECT_LAGGING;
 			}
 		}
-		//MPI_Iprobe((*proc).rank, RING_LAGGING, comm, &(*proc).flag, &(*proc).status);
-		//if ((*proc).flag == 1) {
-		//	MPI_Recv(NULL, 0, MPI_BYTE, (*proc).rank, RING_LAGGING, comm, MPI_STATUSES_IGNORE);
-		//	(*proc).comm_stage = CONNECT_LAGGING;
-		//}
 		break;
 	}
 	case CONNECT_STATE4: {
@@ -179,8 +178,8 @@ void passive_comm_template(
 	}
 }
 
-//主动通信模板
-void active_comm_template(
+//环主动通信模板
+void ring_active_comm_template(
 	MPI_Comm comm,
 	Comm_proc *proc
 ) {
@@ -210,11 +209,6 @@ void active_comm_template(
 				(*proc).comm_stage = CONNECT_LAGGING;
 			}
 		}
-		//MPI_Iprobe((*proc).rank, RING_LAGGING, comm, &(*proc).flag, &(*proc).status);
-		//if ((*proc).flag == 1) {
-		//	MPI_Recv(NULL, 0, MPI_BYTE, (*proc).rank, RING_LAGGING, comm, MPI_STATUSES_IGNORE);
-		//	(*proc).comm_stage = CONNECT_LAGGING;
-		//}
 		break;
 	}
 	case CONNECT_STATE4: {
@@ -374,7 +368,7 @@ void counting_demand(
 	int comm_size,
 	Ring r,
 	Recon_procs rp,
-	Counter *c
+	Ring_Counter *c
 ) {
 	//相邻进程都成功连接
 	if (r.left_proc.comm_stage == CONNECT_FINISH && r.right_proc.comm_stage == CONNECT_FINISH) {
@@ -384,22 +378,22 @@ void counting_demand(
 		(*c).r.right_proc.rank = r.right_proc.rank;
 	}
 	else if (r.left_proc.comm_stage != CONNECT_FINISH && r.right_proc.comm_stage == CONNECT_FINISH) {
-		(*c).demand = find_vaild_neighbor(my_rank, comm_size, rp.left_head, &((*c).r.left_proc.rank));
+		(*c).demand = find_ring_vaild_neighbor(my_rank, comm_size, rp.left_head, &((*c).r.left_proc.rank));
 		if((*c).demand == 1){
 			(*c).r.right_proc.rank = r.right_proc.rank;
 			(*c).stage = STAGE1; 
 		}
 	}
 	else if (r.left_proc.comm_stage == CONNECT_FINISH && r.right_proc.comm_stage != CONNECT_FINISH) {
-		(*c).demand = find_vaild_neighbor(my_rank, comm_size, rp.right_head, &((*c).r.right_proc.rank));
+		(*c).demand = find_ring_vaild_neighbor(my_rank, comm_size, rp.right_head, &((*c).r.right_proc.rank));
 		if ((*c).demand == 1) {
 			(*c).r.left_proc.rank = r.left_proc.rank;
 			(*c).stage = STAGE1;
 		}
 	}
 	else {
-		(*c).demand = find_vaild_neighbor(my_rank, comm_size, rp.left_head, &((*c).r.left_proc.rank)) &&
-			find_vaild_neighbor(my_rank, comm_size, rp.right_head, &((*c).r.right_proc.rank));
+		(*c).demand = find_ring_vaild_neighbor(my_rank, comm_size, rp.left_head, &((*c).r.left_proc.rank)) &&
+			find_ring_vaild_neighbor(my_rank, comm_size, rp.right_head, &((*c).r.right_proc.rank));
 		if ((*c).demand == 1) {
 			(*c).stage = STAGE1;
 		}
@@ -408,29 +402,27 @@ void counting_demand(
 
 //判断是否迟到
 int is_lagging(
-	int my_rank,
 	Ring r,
 	Recon_procs rp
 ) {
 	int res = 0;
-
 	if (r.left_proc.comm_stage == CONNECT_LAGGING) {
-		printf("l proc rank %d tell %d lagging\n", r.left_proc.rank, my_rank);
+		printf("left %d tell me lagging\n", r.left_proc.rank);
 		res = 1;
 		return res;
 	}
-	if (r.right_proc.comm_stage == CONNECT_LAGGING) { 
-		printf("r proc rank %d tell %d lagging\n", r.right_proc.rank, my_rank);
-		res = 1; 
+	if (r.right_proc.comm_stage == CONNECT_LAGGING) {
+		printf("right %d tell me lagging\n", r.right_proc.rank);
+		res = 1;
 		return res;
 	}
 
 	Recon_LL *p;
 	p = rp.left_head->next;
-	while (p != NULL){
-		if (p->proc.comm_stage == CONNECT_LAGGING) { 
-			printf("l rep rank %d tell %d lagging\n", p->proc.rank, my_rank);
-			res = 1; 
+	while (p != NULL) {
+		if (p->proc.comm_stage == CONNECT_LAGGING) {
+			printf("lp %d tell me lagging\n", p->proc.rank);
+			res = 1;
 			return res;
 		}
 		p = p->next;
@@ -439,7 +431,7 @@ int is_lagging(
 	p = rp.right_head->next;
 	while (p != NULL) {
 		if (p->proc.comm_stage == CONNECT_LAGGING) {
-			printf("r rep rank %d tell %d lagging\n", p->proc.rank, my_rank);
+			printf("rp %d tell me lagging\n", p->proc.rank);
 			res = 1;
 			return res;
 		}
@@ -447,6 +439,7 @@ int is_lagging(
 	}
 	return res;
 }
+
 
 int ring_procs_connect(
 	int detector_stage,
@@ -469,8 +462,8 @@ int ring_procs_connect(
 
 	Recon_procs rp;
 	init_recon_procs(&rp);
-	Counter cou;
-	init_counter(&cou);
+	Ring_Counter cou;
+	init_ring_counter(&cou);
 	Comm_proc ver_proc;
 
 	int i = 0, result = -1;
@@ -485,8 +478,8 @@ int ring_procs_connect(
 	while (1)
 	{
 		//环连接
-		passive_comm_template(comm, &(*ring).left_proc);
-		active_comm_template(comm, &(*ring).right_proc);
+		ring_passive_comm_template(comm, &(*ring).left_proc);
+		ring_active_comm_template(comm, &(*ring).right_proc);
 
 		//判断是否重连
 		if (T_wait_out == 0) {
@@ -517,8 +510,8 @@ int ring_procs_connect(
 					rp.start.sec = end.tv_sec;
 					rp.start.usec = end.tv_usec;
 					//找到下一个有效的通信对象
-					rp.recently_tried_proc = find_valid(comm_size, rp.recently_tried_proc,
-						lagging_set.num, lagging_set.procs, 'r');
+					rp.recently_tried_proc = find_ring_valid(comm_size, rp.recently_tried_proc,
+						lagging_set, 'r');
 					//将该进程加入链表中
 					creat_new_recon_proc(rp.right_head, rp.recently_tried_proc, detector_stage);
 					rp.r_num += 1;
@@ -533,7 +526,7 @@ int ring_procs_connect(
 		//判断参与计数的进程
 		if (cou.demand == 0) { counting_demand(my_rank, comm_size, *ring, rp, &cou); }
 		//有计数需求，执行计数
-		if (cou.demand == 1) { arrived_procs_count(comm, my_rank, &cou); }
+		if (cou.demand == 1) { ring_arrived_procs_count(comm, my_rank, &cou); }
 		//如果计数完成
 		if (cou.stage == FINISH) {
 			/*if (my_rank % 20 == 0) {
@@ -542,7 +535,7 @@ int ring_procs_connect(
 			
 			if (cou.sum < min_arr_num) {
 				//计数未达标，初始化counter，重新计数
-				init_counter(&cou);
+				init_ring_counter(&cou);
 			}
 			else {
 				gettimeofday(&end, NULL);
@@ -562,7 +555,7 @@ int ring_procs_connect(
 		}
 		
 		//判断是否迟到
-		if (is_lagging(my_rank,*ring, rp)) {
+		if (is_lagging(*ring, rp)) {
 			result = RING_CONNECT_LAGGING;
 		}
 
@@ -597,120 +590,3 @@ int ring_procs_connect(
 }
 
 
-//=============================================================================================================================
-//lagging进程的主动阻塞状态，被捡回后需要确定一个rescuer
-//=============================================================================================================================
-void block_and_rescuer_confirm(
-	MPI_Comm comm,
-	FD_var fd,
-	int lagging_num,
-	int *lagging_procs,
-	Comm_proc *rescuer
-) {
-	int my_rank, comm_size;
-	MPI_Comm_rank(comm, &my_rank);
-	MPI_Comm_size(comm, &comm_size);
-	printf("rank %d block!\n", my_rank);
-
-	double block_time = 10 * fd.T_wait;
-	Comm_proc savior, tmp_proc;
-	savior.comm_stage = CONNECT_LAGGING;
-	double cost_time;
-	struct timeval st,start,time;
-	
-	gettimeofday(&st, NULL);
-	
-	while (savior.comm_stage != CONNECT_LAGGING_DONE) {
-		switch (savior.comm_stage)
-		{
-		case CONNECT_LAGGING: {
-			//进程响应后，应该将进程加入待捡回进程
-			savior.comm_stage = CONNECT_LAGGING_STATE1;
-			gettimeofday(&start, NULL);
-			break;
-		}
-		case CONNECT_LAGGING_STATE1: {
-			MPI_Iprobe(MPI_ANY_SOURCE, RING_LAGGING_PROBE, comm, &savior.flag, &savior.status);
-			if (savior.flag == 1) {
-				printf("recv lagging probe from rank %d\n", savior.status.MPI_SOURCE);
-				savior.rank = savior.status.MPI_SOURCE;
-				MPI_Recv(NULL, 0, MPI_BYTE, savior.rank, RING_LAGGING_PROBE, comm, MPI_STATUSES_IGNORE);
-				MPI_Isend(NULL, 0, MPI_BYTE, savior.rank, RING_LAGGING_RESPOND, comm, &savior.req);
-				savior.comm_stage = CONNECT_LAGGING_STATE2;
-			}
-			else {
-				gettimeofday(&time, NULL);
-				cost_time = 1000.0 * (time.tv_sec - start.tv_sec) + (time.tv_usec - start.tv_usec) / 1000.0;
-				//如果超过阻塞时间，寻找下一个有效的对象求助
-				if (cost_time > block_time) {
-					savior.comm_stage = CONNECT_LAGGING_TIMEOUT;		
-				}
-			}
-			break;
-		}
-		case CONNECT_LAGGING_STATE2: {
-			MPI_Test(&savior.req, &savior.flag, MPI_STATUSES_IGNORE);
-			if (savior.flag == 1) {
-				savior.comm_stage = CONNECT_LAGGING_STATE3;
-			}
-			break;
-		}
-		case CONNECT_LAGGING_STATE3: {
-			MPI_Iprobe(savior.rank, RING_LAGGING_CONFIRM, comm, &savior.flag, MPI_STATUSES_IGNORE);
-			if (savior.flag == 1) {
-				(*rescuer).rank = savior.rank;
-				(*rescuer).comm_stage = READY;
-				MPI_Recv(&(*rescuer).recv, 1, MPI_INT, (*rescuer).rank, RING_LAGGING_CONFIRM, comm, MPI_STATUSES_IGNORE);
-				savior.comm_stage = CONNECT_LAGGING_DONE;	
-				printf("rank %d be rescued by %d\n", my_rank, (*rescuer).rank);
-			}
-			else
-			{
-				gettimeofday(&time, NULL);
-				cost_time = 1000.0 * (time.tv_sec - start.tv_sec) + (time.tv_usec - start.tv_usec) / 1000.0;
-				//如果超过阻塞时间，寻找下一个有效的对象求助
-				if (cost_time > block_time) {
-					savior.comm_stage = CONNECT_LAGGING_TIMEOUT;
-				}
-			}
-			break;
-		}
-		case CONNECT_LAGGING_TIMEOUT: {
-			//随机寻找一个有效进程发送消息
-			tmp_proc.rank = get_rand_proc(my_rank, comm_size);
-			tmp_proc.comm_stage = CONNECT_STATE1;
-			gettimeofday(&start, NULL);
-			while (1) {
-				ring_active_reconnect_template(comm, &tmp_proc);
-				if (tmp_proc.comm_stage == CONNECT_LAGGING) {
-					break;
-				}
-				else {
-					gettimeofday(&time, NULL);
-					cost_time = 1000.0 * (time.tv_sec - start.tv_sec) + (time.tv_usec - start.tv_usec) / 1000.0;
-					if (cost_time > block_time) {
-						tmp_proc.rank = get_rand_proc(my_rank, comm_size);
-						tmp_proc.comm_stage = CONNECT_STATE1;
-						gettimeofday(&start, NULL);
-					}
-				}
-			}
-
-			savior.rank = tmp_proc.rank;
-			savior.comm_stage = CONNECT_LAGGING_STATE1;
-			gettimeofday(&start, NULL);
-			break;
-		}
-		default:
-			break;
-		}
-
-		gettimeofday(&time, NULL);
-		cost_time = 1000.0 * (time.tv_sec - st.tv_sec) + (time.tv_usec - st.tv_usec) / 1000.0;
-		//如果超过阻塞时间，寻找下一个有效的对象求助
-		if (cost_time > fd.T_max) {
-			(*rescuer).comm_stage = CONNECT_TIMEOUT_BREAK;
-			break;
-		}
-	}
-}

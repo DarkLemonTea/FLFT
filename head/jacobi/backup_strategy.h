@@ -3,7 +3,7 @@
 
 #ifndef HEADER_FILE
 #define HEADER_FILE
-#include "../Ring_FD/ring_head.h"
+#include "../FLFT/fl_head.h"
 #include "block_parallel.h"
 #endif
 
@@ -86,8 +86,11 @@ int rebuild_comm_graph(
 	int row_ind = my_rank / n;
 	int col_ind = my_rank % n;
 
-	int i = 0, index, num = n, ll_num = 0, ind = 0, tmp_rank;
-	int *procs, *ll_procs;
+	int i = 0, index, num = n, ind = 0, tmp_rank;
+	int *procs;
+
+	P_set ll_set;
+	init_p_set(&ll_set);
 
 	Backup tmp;
 	
@@ -95,23 +98,23 @@ int rebuild_comm_graph(
 		//以r为树时，容错集合通信是reduce。
 		ind = 0;
 		//首先从lagging集合中筛选出同行的lagging进程
-		ll_procs = (int*)calloc(fd.Lagging_procs.num, sizeof(int));
+		ll_set.procs = (int*)calloc(fd.Lagging_procs.num, sizeof(int));
 		for (i = 0; i < fd.Lagging_procs.num; i++) {
 			if (fd.Lagging_procs.procs[i] / n == row_ind) {
-				ll_procs[ind] = fd.Lagging_procs.procs[i];
+				ll_set.procs[ind] = fd.Lagging_procs.procs[i];
 				ind += 1;
 			}
 		}
-		ll_num = ind;
-		num = n - ll_num;
+		ll_set.num = ind;
+		num = n - ll_set.num;
 
 		procs = (int*)calloc(num, sizeof(int));
 
 		procs[0] = root;
-		if (in(ll_num, ll_procs, root)) {
+		if (in(ll_set, root)) {
 			back_up_index(root, n, &tmp);
-			if (in(fd.Lagging_procs.num, fd.Lagging_procs.procs, tmp.des.rank)) {
-				if (ll_procs != NULL) { free(ll_procs); }
+			if (in(fd.Lagging_procs, tmp.des.rank)) {
+				if (ll_set.procs != NULL) { free(ll_set.procs); }
 				if (procs != NULL) { free(procs); }
 				return REBUILD_FAILURE;
 			}
@@ -125,11 +128,11 @@ int rebuild_comm_graph(
 
 		for (i = 1; i < n; i++) {
 			tmp_rank = row_ind * n + i;
-			if (in(ll_num, ll_procs, tmp_rank)) {
+			if (in(ll_set, tmp_rank)) {
 				back_up_index(tmp_rank, n, &tmp);
 				//如果无法恢复，则中断退出
-				if (in(fd.Lagging_procs.num, fd.Lagging_procs.procs, tmp.des.rank)) {
-					if (ll_procs != NULL) { free(ll_procs); }
+				if (in(fd.Lagging_procs, tmp.des.rank)) {
+					if (ll_set.procs != NULL) { free(ll_set.procs); }
 					if (procs != NULL) { free(procs); }
 					return REBUILD_FAILURE;
 				}
@@ -155,23 +158,23 @@ int rebuild_comm_graph(
 		//以r为树时，容错集合通信是reduce。
 		ind = 0;
 		//首先从lagging集合中筛选出同行的lagging进程
-		ll_procs = (int*)calloc(fd.Lagging_procs.num, sizeof(int));
+		ll_set.procs = (int*)calloc(fd.Lagging_procs.num, sizeof(int));
 		for (i = 0; i < fd.Lagging_procs.num; i++) {
 			if (fd.Lagging_procs.procs[i] % n == col_ind) {
-				ll_procs[ind] = fd.Lagging_procs.procs[i];
+				ll_set.procs[ind] = fd.Lagging_procs.procs[i];
 				ind += 1;
 			}
 		}
-		ll_num = ind;
+		ll_set.num = ind;
 		num = n;
 
 		procs = (int*)calloc(num, sizeof(int));
 
 		procs[0] = root;
-		if (in(ll_num, ll_procs, root)) {
+		if (in(ll_set, root)) {
 			back_up_index(root, n, &tmp);
-			if (in(fd.Lagging_procs.num, fd.Lagging_procs.procs, tmp.des.rank)) {
-				if (ll_procs != NULL) { free(ll_procs); }
+			if (in(fd.Lagging_procs, tmp.des.rank)) {
+				if (ll_set.procs != NULL) { free(ll_set.procs); }
 				if (procs != NULL) { free(procs); }
 				return REBUILD_FAILURE;
 			}
@@ -185,11 +188,11 @@ int rebuild_comm_graph(
 		
 		for (i = 1; i < num; i++) {
 			tmp_rank = col_ind + i * n;
-			if (in(ll_num, ll_procs, tmp_rank)) {
+			if (in(ll_set, tmp_rank)) {
 				back_up_index(tmp_rank, n, &tmp);
 				//如果无法恢复，则中断退出
-				if (in(fd.Lagging_procs.num, fd.Lagging_procs.procs, tmp.des.rank)) {
-					if (ll_procs != NULL) { free(ll_procs); }
+				if (in(fd.Lagging_procs, tmp.des.rank)) {
+					if (ll_set.procs != NULL) { free(ll_set.procs); }
 					if (procs != NULL) { free(procs); }
 					return REBUILD_FAILURE;
 				}
@@ -208,7 +211,7 @@ int rebuild_comm_graph(
 					if (my_rank == col_ind) {
 						index = ind;
 					}
-					if (in(fd.Lagging_procs.num, fd.Lagging_procs.procs, col_ind)) {
+					if (in(fd.Lagging_procs, col_ind)) {
 						back_up_index(col_ind, n, &tmp);
 						procs[ind] = tmp.des.rank;
 					}
@@ -231,7 +234,7 @@ int rebuild_comm_graph(
 	if (index * 2 + 2 >= num) { (*ct).rchild.rank = -1; }
 	else { (*ct).rchild.rank = procs[index * 2 + 2]; }
 
-	if (ll_procs != NULL) { free(ll_procs); }
+	if (ll_set.procs != NULL) { free(ll_set.procs); }
 	if (procs != NULL) { free(procs); }
 
 	if ((*ct).lchild.rank > -1) {

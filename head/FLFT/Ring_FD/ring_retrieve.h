@@ -1,13 +1,11 @@
 #ifndef HEADER_FILE
 #define HEADER_FILE
-#include"ring_head.h"
-#include"ring_connect.h"
+#include"../fl_head.h"
 #endif
 
 //=============================================================================================================================
 //(1)探测消息并捡回
 //=============================================================================================================================
-
 void probe_connect1(
 	MPI_Comm comm,
 	int probe_tag,
@@ -21,7 +19,7 @@ void probe_connect1(
 		MPI_Iprobe(MPI_ANY_SOURCE, probe_tag, comm, &prober.flag, &prober.status);
 
 		if (prober.flag == 1) {
-			if (in((*sp).Lagging_procs.num, (*sp).Lagging_procs.procs, prober.status.MPI_SOURCE) &&
+			if (in((*sp).Lagging_procs, prober.status.MPI_SOURCE) &&
 				!linked_list_in((*sp).local_re_phead, prober.status.MPI_SOURCE)) {
 
 				//printf("probe message from %d\n", prober.status.MPI_SOURCE);
@@ -59,7 +57,7 @@ void probe_connect2(
 	while (prober.flag == 1) {
 		MPI_Iprobe(MPI_ANY_SOURCE, probe_tag, comm, &prober.flag, &prober.status);
 		if (prober.flag == 1) {
-			if (in((*sp).Lagging_procs.num, (*sp).Lagging_procs.procs, prober.status.MPI_SOURCE) &&
+			if (in((*sp).Lagging_procs, prober.status.MPI_SOURCE) &&
 				!linked_list_in((*sp).local_re_phead, prober.status.MPI_SOURCE)) {
 
 				//printf("probe message from %d\n", prober.status.MPI_SOURCE);
@@ -161,11 +159,9 @@ void rescue_lagging_procs(
 void ring_multigather_revive_procs(
 	MPI_Comm comm,
 	Ring ring,
-	int local_revive_num,
-	int *local_revive_procs,
+	P_set local_revive,
 	//output
-	int *ring_revive_procs_num,
-	int **ring_revive_procs_procs
+	P_set *ring_revive
 ) {
 	int my_rank, comm_size;
 	MPI_Comm_rank(comm, &my_rank);
@@ -176,8 +172,9 @@ void ring_multigather_revive_procs(
 	else if (my_rank > ring.right_proc.rank) { ide = 2; }//末尾进程
 	else { ide = 1; }
 
-	int recv_num = 0, send_num = 0, total_num = 0;
-	int *recv_procs = NULL, *send_procs = NULL, *total_procs = NULL;
+	P_set send_set, recv_set;
+	init_p_set(&send_set);
+	init_p_set(&recv_set);
 
 	Comm_proc left_proc, right_proc;
 	init_proc(ring.left_proc.rank, &left_proc);
@@ -188,7 +185,8 @@ void ring_multigather_revive_procs(
 	case 0:
 	{	//第一轮环状多播，非阻塞实现	
 		while (1) {
-			send_procs_template(comm, &right_proc, RING_GATHER_REVIVE_NUM, RING_GATHER_REVIVE_PROCS, local_revive_num, local_revive_procs);
+			send_procs_template(comm, &right_proc, 
+				RING_GATHER_REVIVE_NUM, RING_GATHER_REVIVE_PROCS, local_revive);
 			if (right_proc.comm_stage == FINISH) { break; }
 		}
 
@@ -198,15 +196,13 @@ void ring_multigather_revive_procs(
 		{
 			//接收数组
 			if (left_proc.comm_stage != FINISH) {
-				recv_procs_template(comm, &left_proc, RING_MULTICAST_REVIVE_NUM, RING_MULTICAST_REVIVE_PROCS, &total_num, &total_procs);
-				if (left_proc.comm_stage == FINISH) {
-					*ring_revive_procs_num = total_num;
-					*ring_revive_procs_procs = total_procs;
-				}
+				recv_procs_template(comm, &left_proc, 
+					RING_MULTICAST_REVIVE_NUM, RING_MULTICAST_REVIVE_PROCS, ring_revive);
 			}
 			else {
 				//发送数组
-				send_procs_template(comm, &right_proc, RING_MULTICAST_REVIVE_NUM, RING_MULTICAST_REVIVE_PROCS, total_num, total_procs);
+				send_procs_template(comm, &right_proc, 
+					RING_MULTICAST_REVIVE_NUM, RING_MULTICAST_REVIVE_PROCS, *ring_revive);
 			}
 			if (right_proc.comm_stage == FINISH) { break; }
 		}
@@ -217,15 +213,18 @@ void ring_multigather_revive_procs(
 		//第一轮	
 		while (1) {
 			if (left_proc.comm_stage != FINISH) {
-				recv_procs_template(comm, &left_proc, RING_GATHER_REVIVE_NUM, RING_GATHER_REVIVE_PROCS, &recv_num, &recv_procs);
+				recv_procs_template(comm, &left_proc, 
+					RING_GATHER_REVIVE_NUM, RING_GATHER_REVIVE_PROCS, &recv_set);
 			}
 			else {
 				if (right_proc.comm_stage == READY) {
-					merge_procs(local_revive_num, recv_num, local_revive_procs, recv_procs, &send_num, &send_procs);
-					send_procs_template(comm, &right_proc, RING_GATHER_REVIVE_NUM, RING_GATHER_REVIVE_PROCS, send_num, send_procs);
+					merge_procs(local_revive, recv_set, &send_set);
+					send_procs_template(comm, &right_proc, 
+						RING_GATHER_REVIVE_NUM, RING_GATHER_REVIVE_PROCS, send_set);
 				}
 				else {
-					send_procs_template(comm, &right_proc, RING_GATHER_REVIVE_NUM, RING_GATHER_REVIVE_PROCS, send_num, send_procs);
+					send_procs_template(comm, &right_proc, 
+						RING_GATHER_REVIVE_NUM, RING_GATHER_REVIVE_PROCS, send_set);
 				}
 			}
 			if (right_proc.comm_stage == FINISH) { break; }
@@ -237,15 +236,13 @@ void ring_multigather_revive_procs(
 		{
 			//接收数组
 			if (left_proc.comm_stage != FINISH) {
-				recv_procs_template(comm, &left_proc, RING_MULTICAST_REVIVE_NUM, RING_MULTICAST_REVIVE_PROCS, &total_num, &total_procs);
-				if (left_proc.comm_stage == FINISH) {
-					*ring_revive_procs_num = total_num;
-					*ring_revive_procs_procs = total_procs;
-				}
+				recv_procs_template(comm, &left_proc, 
+					RING_MULTICAST_REVIVE_NUM, RING_MULTICAST_REVIVE_PROCS, ring_revive);
 			}
 			else {
 				//发送数组
-				send_procs_template(comm, &right_proc, RING_MULTICAST_REVIVE_NUM, RING_MULTICAST_REVIVE_PROCS, total_num, total_procs);
+				send_procs_template(comm, &right_proc, 
+					RING_MULTICAST_REVIVE_NUM, RING_MULTICAST_REVIVE_PROCS, *ring_revive);
 			}
 			if (right_proc.comm_stage == FINISH) { break; }
 		}
@@ -254,19 +251,19 @@ void ring_multigather_revive_procs(
 	case 2:
 	{
 		while (1) {
-			recv_procs_template(comm, &left_proc, RING_GATHER_REVIVE_NUM, RING_GATHER_REVIVE_PROCS, &recv_num, &recv_procs);
+			recv_procs_template(comm, &left_proc, 
+				RING_GATHER_REVIVE_NUM, RING_GATHER_REVIVE_PROCS, &recv_set);
 			if (left_proc.comm_stage == FINISH) { break; }
 		}
 
-		merge_procs(local_revive_num, recv_num, local_revive_procs, recv_procs, &total_num, &total_procs);
-		*ring_revive_procs_num = total_num;
-		*ring_revive_procs_procs = total_procs;
+		merge_procs(local_revive, recv_set, ring_revive);
 
 		//第二轮，多播
 		left_proc.comm_stage = READY; right_proc.comm_stage = READY;
 		while (1)
 		{
-			send_procs_template(comm, &right_proc, RING_MULTICAST_REVIVE_NUM, RING_MULTICAST_REVIVE_PROCS, total_num, total_procs);
+			send_procs_template(comm, &right_proc, 
+				RING_MULTICAST_REVIVE_NUM, RING_MULTICAST_REVIVE_PROCS, *ring_revive);
 			if (right_proc.comm_stage == FINISH) { break; }
 		}
 		break;
@@ -275,7 +272,7 @@ void ring_multigather_revive_procs(
 	}
 }
 
-void remove_revive_procs(
+void ring_remove_revive_procs(
 	Detector *sp
 ) {
 	int num = (*sp).Lagging_procs.num - (*sp).Revive_procs.num;
@@ -289,7 +286,7 @@ void remove_revive_procs(
 		procs = (int*)calloc(num, sizeof(int));
 		int ind = 0, i;
 		for (i = 0; i < (*sp).Lagging_procs.num; i++) {
-			if (in((*sp).Revive_procs.num, (*sp).Revive_procs.procs, (*sp).Lagging_procs.procs[i])) {
+			if (in((*sp).Revive_procs, (*sp).Lagging_procs.procs[i])) {
 				continue;
 			}
 			else {
@@ -299,6 +296,33 @@ void remove_revive_procs(
 		}
 		(*sp).Lagging_procs.num = num;
 		(*sp).Lagging_procs.procs = procs;
+	}
+}
+
+void remove_sub_ring_revive_procs(
+	Detector *sp
+) {
+	int num = (*sp).Ring_lagging_procs.num - (*sp).Ring_Revive_procs.num;
+
+	if (num == 0) {
+		(*sp).Ring_lagging_procs.num = 0;
+		(*sp).Ring_lagging_procs.procs = NULL;
+	}
+	else {
+		int *procs;
+		procs = (int*)calloc(num, sizeof(int));
+		int ind = 0, i;
+		for (i = 0; i < (*sp).Ring_lagging_procs.num; i++) {
+			if (in((*sp).Ring_Revive_procs, (*sp).Ring_lagging_procs.procs[i])) {
+				continue;
+			}
+			else {
+				procs[i] = (*sp).Ring_Revive_procs.procs[i];
+				ind += 1;
+			}
+		}
+		(*sp).Ring_lagging_procs.num = num;
+		(*sp).Ring_lagging_procs.procs = procs;
 	}
 }
 
@@ -337,15 +361,15 @@ void ring_retrieve_procs(
 	}
 
 	//第二步：筛选出捡回的本地进程，捡回失败的删除
-	int local_revive_num = 0;
-	int *local_revive_procs;
+	P_set local_revive;
+	init_p_set(&local_revive);
 	
 	//第一次遍历，计数
 	pre = (*sp).local_re_phead;
 	p = (*sp).local_re_phead->next;
 	while (p != NULL) {
 		if (p->revive_proc.comm_stage == FINISH) {
-			local_revive_num += 1;
+			local_revive.num += 1;
 			p->revive_proc.comm_stage = READY;
 			pre = p;
 			p = p->next;
@@ -356,27 +380,26 @@ void ring_retrieve_procs(
 			p = pre->next;
 		}
 	}
-	local_revive_procs = (int*)calloc(local_revive_num, sizeof(int));
+	local_revive.procs = (int*)calloc(local_revive.num, sizeof(int));
 
 	//第二次遍历，填入
 	pre = (*sp).local_re_phead;
 	p = (*sp).local_re_phead->next;
 	int i = 0;
 	while (p != NULL) {
-		local_revive_procs[i] = p->revive_proc.rank;
+		local_revive.procs[i] = p->revive_proc.rank;
 		i += 1;
 		pre = p;
 		p = p->next;
 	}
 
-	ring_multigather_revive_procs(comm, (*sp).ring, local_revive_num, local_revive_procs,
-		&(*sp).Revive_procs.num, &(*sp).Revive_procs.procs);
+	ring_multigather_revive_procs(comm, (*sp).ring, local_revive, &(*sp).Revive_procs);
 	//if ((*sp).Revive_procs.num > 0) {
 	//	printf("total revive num is %d\n", (*sp).Revive_procs.num);
 	//}
 
-	remove_revive_procs(sp);
-	init_ring(comm_size, my_rank, detector_stage, (*sp).Lagging_procs.num, (*sp).Lagging_procs.procs, &(*sp).ring);
+	ring_remove_revive_procs(sp);
+	init_ring(comm_size, my_rank, detector_stage, (*sp).Lagging_procs, &(*sp).ring);
 }
 
 //=============================================================================================================================
@@ -403,7 +426,7 @@ int activate_revive_procs(
 		while (p != NULL) {
 			send_procs_template(comm, &p->revive_proc,
 				RING_REVIVE_DATA_LAGGING_NUM, RING_REVIVE_DATA_LAGGING_PROCS,
-				(*sp).Lagging_procs.num, (*sp).Lagging_procs.procs);
+				(*sp).Lagging_procs);
 			if (p->revive_proc.comm_stage == FINISH) {
 				printf("activate finish\n");
 				//如果完成，删除进程
@@ -421,8 +444,5 @@ int activate_revive_procs(
 
 	return 0;
 }
-
-
-
 
 

@@ -7,8 +7,10 @@
 
 #ifndef HEADER_FILE
 #define HEADER_FILE
-#include "block_parallel.h"
+#include "gen_matrix.h"
 #endif
+
+#include "block_parallel.h"
 
 #define ITERATION_CONVERGENCE 0
 #define ITERATION_NOT_CONVERGENCE 1
